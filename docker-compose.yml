@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: educa-mais-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: educa
+      POSTGRES_PASSWORD: educa123
+      POSTGRES_DB: educa_mais
+    ports:
+      - "5432:5432"
+    volumes:
+      - educa_mais_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U educa -d educa_mais"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  educa_mais_pgdata:

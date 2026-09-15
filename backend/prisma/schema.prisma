@@ -1,0 +1,433 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ALUNO
+  PROFESSOR
+  RESPONSAVEL
+  COORDENACAO
+}
+
+enum TarefaTipo {
+  TRABALHO
+  TESTE
+  LEITURA
+  REVISAO
+  OUTRO
+}
+
+enum MaterialTipo {
+  TEXTO
+  LINK
+  ARQUIVO
+  VIDEO
+}
+
+enum NivelDificuldade {
+  BAIXO
+  MEDIO
+  ALTO
+}
+
+enum DuvidaStatus {
+  PENDENTE
+  RESPONDIDA
+}
+
+enum TipoObservacao {
+  ELOGIO
+  ATENCAO
+  NEUTRA
+}
+
+enum QuizModo {
+  SOLO
+  AO_VIVO
+}
+
+enum SessaoStatus {
+  LOBBY
+  EM_ANDAMENTO
+  ENCERRADA
+}
+
+model User {
+  id        String   @id @default(cuid())
+  nome      String
+  email     String   @unique
+  senhaHash String
+  role      Role
+  // Código que o aluno entrega ao responsável para que ele se vincule.
+  // Só é gerado para contas de aluno.
+  codigoVinculo String? @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  turmasLecionadas  Turma[]              @relation("ProfessorTurmas")
+  matriculas        Matricula[]
+  tarefasCriadas    Tarefa[]             @relation("TarefaCriador")
+  tarefasPessoais   Tarefa[]             @relation("TarefaPessoal")
+  tarefaConclusoes  TarefaConclusao[]
+  materiaisCriados  Material[]
+  duvidasEnviadas   Duvida[]             @relation("DuvidaAluno")
+  respostasDadas    RespostaDuvida[]
+  avisosCriados     Aviso[]
+  vinculosComoResp  VinculoResponsavel[] @relation("VinculoResponsavel")
+  vinculosComoAluno VinculoResponsavel[] @relation("VinculoAluno")
+  progressos        ProgressoAluno[]
+  quizzesCriados    Quiz[]
+  sessoesHospedadas QuizSessao[]
+  participacoes     QuizParticipante[]
+  avisosLidos       AvisoLeitura[]
+  conversasComoProfessor   Conversa[]  @relation("ConversaProfessor")
+  conversasComoResponsavel Conversa[]  @relation("ConversaResponsavel")
+  conversasSobreMim        Conversa[]  @relation("ConversaAluno")
+  mensagensEnviadas        Mensagem[]
+  observacoesRecebidas     ObservacaoAluno[] @relation("ObservacaoAluno")
+  observacoesEscritas      ObservacaoAluno[] @relation("ObservacaoProfessor")
+
+  @@map("users")
+}
+
+model Turma {
+  id          String   @id @default(cuid())
+  nome        String
+  disciplina  String
+  codigo      String   @unique
+  professorId String
+  professor   User     @relation("ProfessorTurmas", fields: [professorId], references: [id])
+  createdAt   DateTime @default(now())
+
+  matriculas  Matricula[]
+  tarefas     Tarefa[]
+  materiais   Material[]
+  duvidas     Duvida[]
+  avisos      Aviso[]
+  progressos  ProgressoAluno[]
+  quizzes     Quiz[]
+  sessoes     QuizSessao[]
+  observacoes ObservacaoAluno[]
+
+  @@map("turmas")
+}
+
+model Matricula {
+  id        String   @id @default(cuid())
+  alunoId   String
+  turmaId   String
+  aluno     User     @relation(fields: [alunoId], references: [id])
+  turma     Turma    @relation(fields: [turmaId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([alunoId, turmaId])
+  @@map("matriculas")
+}
+
+model Tarefa {
+  id          String     @id @default(cuid())
+  titulo      String
+  descricao   String?
+  tipo        TarefaTipo @default(OUTRO)
+  topico      String?
+  dataEntrega DateTime
+  turmaId     String?
+  turma       Turma?     @relation(fields: [turmaId], references: [id])
+  alunoId     String?
+  aluno       User?      @relation("TarefaPessoal", fields: [alunoId], references: [id])
+  criadoPorId String
+  criadoPor   User       @relation("TarefaCriador", fields: [criadoPorId], references: [id])
+  concluida   Boolean    @default(false)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  conclusoes  TarefaConclusao[]
+
+  @@map("tarefas")
+}
+
+model TarefaConclusao {
+  id          String    @id @default(cuid())
+  tarefaId    String
+  tarefa      Tarefa    @relation(fields: [tarefaId], references: [id], onDelete: Cascade)
+  alunoId     String
+  aluno       User      @relation(fields: [alunoId], references: [id])
+  concluida   Boolean   @default(false)
+  concluidaEm DateTime?
+
+  @@unique([tarefaId, alunoId])
+  @@map("tarefa_conclusoes")
+}
+
+model Material {
+  id         String       @id @default(cuid())
+  titulo     String
+  descricao  String?
+  tipo       MaterialTipo
+  conteudo   String?
+  arquivoUrl String?
+  disciplina String
+  tema       String
+  topico     String?
+  turmaId    String
+  turma      Turma        @relation(fields: [turmaId], references: [id])
+  autorId    String
+  autor      User         @relation(fields: [autorId], references: [id])
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  @@map("materiais")
+}
+
+model Duvida {
+  id               String           @id @default(cuid())
+  alunoId          String
+  aluno            User             @relation("DuvidaAluno", fields: [alunoId], references: [id])
+  turmaId          String
+  turma            Turma            @relation(fields: [turmaId], references: [id])
+  disciplina       String
+  tema             String
+  pergunta         String
+  imagemUrl        String?
+  nivelDificuldade NivelDificuldade @default(MEDIO)
+  status           DuvidaStatus     @default(PENDENTE)
+  destacada        Boolean          @default(false)
+  createdAt        DateTime         @default(now())
+
+  respostas        RespostaDuvida[]
+
+  @@map("duvidas")
+}
+
+model RespostaDuvida {
+  id          String   @id @default(cuid())
+  duvidaId    String
+  duvida      Duvida   @relation(fields: [duvidaId], references: [id], onDelete: Cascade)
+  professorId String
+  professor   User     @relation(fields: [professorId], references: [id])
+  resposta    String
+  createdAt   DateTime @default(now())
+
+  @@map("respostas_duvida")
+}
+
+model Aviso {
+  id         String    @id @default(cuid())
+  titulo     String
+  mensagem   String
+  turmaId    String?
+  turma      Turma?    @relation(fields: [turmaId], references: [id])
+  autorId    String
+  autor      User      @relation(fields: [autorId], references: [id])
+  dataLimite DateTime?
+  createdAt  DateTime  @default(now())
+
+  leituras   AvisoLeitura[]
+
+  @@map("avisos")
+}
+
+/// Confirmação de ciência de um aviso, para o professor saber quem já leu.
+model AvisoLeitura {
+  id      String   @id @default(cuid())
+  avisoId String
+  aviso   Aviso    @relation(fields: [avisoId], references: [id], onDelete: Cascade)
+  userId  String
+  user    User     @relation(fields: [userId], references: [id])
+  lidoEm  DateTime @default(now())
+
+  @@unique([avisoId, userId])
+  @@map("aviso_leituras")
+}
+
+/// Canal privado entre um professor e um responsável, sempre sobre um aluno.
+model Conversa {
+  id            String   @id @default(cuid())
+  professorId   String
+  professor     User     @relation("ConversaProfessor", fields: [professorId], references: [id])
+  responsavelId String
+  responsavel   User     @relation("ConversaResponsavel", fields: [responsavelId], references: [id])
+  alunoId       String
+  aluno         User     @relation("ConversaAluno", fields: [alunoId], references: [id])
+  createdAt     DateTime @default(now())
+  atualizadaEm  DateTime @default(now())
+
+  mensagens Mensagem[]
+
+  @@unique([professorId, responsavelId, alunoId])
+  @@map("conversas")
+}
+
+model Mensagem {
+  id        String    @id @default(cuid())
+  conversaId String
+  conversa  Conversa  @relation(fields: [conversaId], references: [id], onDelete: Cascade)
+  autorId   String
+  autor     User      @relation(fields: [autorId], references: [id])
+  texto     String
+  lidaEm    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@map("mensagens")
+}
+
+/// Registro pedagógico do professor sobre um aluno, visível ao responsável.
+model ObservacaoAluno {
+  id          String         @id @default(cuid())
+  alunoId     String
+  aluno       User           @relation("ObservacaoAluno", fields: [alunoId], references: [id])
+  professorId String
+  professor   User           @relation("ObservacaoProfessor", fields: [professorId], references: [id])
+  turmaId     String?
+  turma       Turma?         @relation(fields: [turmaId], references: [id])
+  tipo        TipoObservacao @default(NEUTRA)
+  texto       String
+  createdAt   DateTime       @default(now())
+
+  @@map("observacoes_aluno")
+}
+
+model VinculoResponsavel {
+  id            String   @id @default(cuid())
+  responsavelId String
+  responsavel   User     @relation("VinculoResponsavel", fields: [responsavelId], references: [id])
+  alunoId       String
+  aluno         User     @relation("VinculoAluno", fields: [alunoId], references: [id])
+  parentesco    String?
+  createdAt     DateTime @default(now())
+
+  @@unique([responsavelId, alunoId])
+  @@map("vinculos_responsavel")
+}
+
+model ProgressoAluno {
+  id                  String   @id @default(cuid())
+  alunoId             String
+  aluno               User     @relation(fields: [alunoId], references: [id])
+  turmaId             String?
+  turma               Turma?   @relation(fields: [turmaId], references: [id])
+  periodoInicio       DateTime
+  periodoFim          DateTime
+  tarefasConcluidas   Int
+  tarefasTotal        Int
+  percentualConcluido Float
+  duvidasEnviadas     Int      @default(0)
+  createdAt           DateTime @default(now())
+
+  @@unique([alunoId, turmaId, periodoInicio])
+  @@map("progresso_aluno")
+}
+
+// ---------------------------------------------------------------------------
+// Jogos interativos (quiz estilo Kahoot)
+// ---------------------------------------------------------------------------
+
+model Quiz {
+  id          String   @id @default(cuid())
+  titulo      String
+  descricao   String?
+  disciplina  String
+  tema        String?
+  // Quiz do banco da plataforma (semeado), disponível para qualquer aluno montar
+  // um jogo solo da matéria. Quizzes criados por professores ficam com false.
+  doBanco     Boolean  @default(false)
+  turmaId     String?
+  turma       Turma?   @relation(fields: [turmaId], references: [id])
+  criadoPorId String?
+  criadoPor   User?    @relation(fields: [criadoPorId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  perguntas QuizPergunta[]
+  sessoes   QuizSessao[]
+
+  @@map("quizzes")
+}
+
+model QuizPergunta {
+  id                String @id @default(cuid())
+  quizId            String
+  quiz              Quiz   @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  enunciado         String
+  ordem             Int
+  tempoLimiteSegundos Int  @default(20)
+
+  opcoes    QuizOpcao[]
+  respostas QuizResposta[]
+
+  @@map("quiz_perguntas")
+}
+
+model QuizOpcao {
+  id         String       @id @default(cuid())
+  perguntaId String
+  pergunta   QuizPergunta @relation(fields: [perguntaId], references: [id], onDelete: Cascade)
+  texto      String
+  correta    Boolean      @default(false)
+  ordem      Int
+
+  respostas QuizResposta[]
+
+  @@map("quiz_opcoes")
+}
+
+model QuizSessao {
+  id       String       @id @default(cuid())
+  quizId   String
+  quiz     Quiz         @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  modo     QuizModo
+  // PIN de entrada, só existe no modo AO_VIVO.
+  pin      String?      @unique
+  status   SessaoStatus @default(LOBBY)
+  // Índice da pergunta atual (-1 = ainda no lobby). No modo SOLO o próprio aluno avança.
+  perguntaIndex       Int       @default(-1)
+  perguntaIniciadaEm  DateTime?
+  hostId   String
+  host     User         @relation(fields: [hostId], references: [id])
+  turmaId  String?
+  turma    Turma?       @relation(fields: [turmaId], references: [id])
+  createdAt   DateTime  @default(now())
+  encerradaEm DateTime?
+
+  participantes QuizParticipante[]
+
+  @@map("quiz_sessoes")
+}
+
+model QuizParticipante {
+  id        String     @id @default(cuid())
+  sessaoId  String
+  sessao    QuizSessao @relation(fields: [sessaoId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User       @relation(fields: [userId], references: [id])
+  nome      String
+  pontuacao Int        @default(0)
+  createdAt DateTime   @default(now())
+
+  respostas QuizResposta[]
+
+  @@unique([sessaoId, userId])
+  @@map("quiz_participantes")
+}
+
+model QuizResposta {
+  id             String           @id @default(cuid())
+  participanteId String
+  participante   QuizParticipante @relation(fields: [participanteId], references: [id], onDelete: Cascade)
+  perguntaId     String
+  pergunta       QuizPergunta     @relation(fields: [perguntaId], references: [id], onDelete: Cascade)
+  opcaoId        String?
+  opcao          QuizOpcao?       @relation(fields: [opcaoId], references: [id])
+  correta        Boolean
+  tempoMs        Int
+  pontos         Int
+  createdAt      DateTime         @default(now())
+
+  @@unique([participanteId, perguntaId])
+  @@map("quiz_respostas")
+}

@@ -1,0 +1,21 @@
+# Dependências
+node_modules/
+
+# Builds
+dist/
+
+# Variáveis de ambiente (contêm segredos) — use os .env.example
+.env
+.env.local
+
+# Arquivos enviados pelos usuários em desenvolvimento
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Sistema / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.claude/
+*.log
